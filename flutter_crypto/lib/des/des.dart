@@ -12,7 +12,7 @@ import 'package:fluttercrypto/util/padding.dart';
 class DES {
   static const String _iv = '01234567';
   static const BLOCK_SIZE = 8;
-  List<List<int>> dispareKeys;
+  List<List<int>>? dispareKeys = null;
   static const E_box = [
     //E
     32, 1, 2, 3, 4, 5, 4, 5, 6, 7, 8, 9,
@@ -128,17 +128,18 @@ class DES {
 
   ///将64字节的密钥压缩成56字节  字节数组转为二进制数组
   List<int> _compressKeyTo56(List<int> key) {
-    List<int> bitKey = List(56);
+    final _key = Padding.zeroPadding(key);
+    List<int> bitKey = List.filled(56, 0);
     for (int i = 0; i < 56; i++) {
       int realIndex = PC_1[i] - 1;
-      bitKey[i] = (key[realIndex >> 3] >> (7 - realIndex & 7)) & 1;
+      bitKey[i] = (_key[realIndex >> 3] >> (7 - realIndex & 7)) & 1;
     }
     return bitKey;
   }
 
   ///离散得到16个子密钥
   List<List<int>> dispareKey(List<int> compressKey) {
-    List<List<int>> dispareKeys = List(16);
+    List<List<int>> dispareKeys = List.filled(16, <int>[]);
     List<int> c0 = compressKey.sublist(0, 28);
     List<int> d0 = compressKey.sublist(28);
     List<int> tempc = c0;
@@ -167,7 +168,7 @@ class DES {
 
   ///将56位的密钥压缩为48位 二进制数组 处理
   List<int> compressDispareKey(List<int> dispareKey) {
-    List<int> bitKey = List(48);
+    List<int> bitKey = List.filled(48, 0);
     for (int i = 0; i < 48; i++) {
       int realIndex = PC_2[i] - 1;
       bitKey[i] = dispareKey[realIndex];
@@ -179,7 +180,7 @@ class DES {
 
   ///明文转换  字节数组转二进制数组
   List<int> compressPlain(List<int> plain) {
-    List<int> bitKey = List(64);
+    List<int> bitKey = List.filled(64, 0);
     for (int i = 0; i < 64; i++) {
       int realIndex = IP[i] - 1;
       bitKey[i] = (plain[realIndex >> 3] >> (7 - realIndex & 7)) & 1;
@@ -191,7 +192,7 @@ class DES {
   List<int> E_transform(List<int> list) {
     ///左半部分为 L0  右半部分为R0
     //print("before E transform : " + list.toString());
-    List<int> result = List(48);
+    List<int> result = List.filled(48, 0);
     for (int i = 0; i < 48; i++) {
       result[i] = list[E_box[i] - 1];
     }
@@ -201,7 +202,7 @@ class DES {
 
   ///P盒置换
   List<int> P_transform(List<int> list) {
-    List<int> bitKey = List(32);
+    List<int> bitKey = List.filled(32, 0);
     for (int i = 0; i < 32; i++) {
       int realIndex = P_Box[i] - 1;
       bitKey[i] = list[realIndex];
@@ -212,7 +213,7 @@ class DES {
   ///S盒变换 二进制结果
   List<int> _S_Box_transform(List<int> list) {
     ///check list length 48
-    List<int> result = List(32);
+    List<int> result = List.filled(32, 0);
     for (int i = 0; i < list.length; i += 6) {
       int x = (list[i + 1] << 3 |
           list[i + 2] << 2 |
@@ -232,7 +233,7 @@ class DES {
 
   ///异或
   List<int> _XOR_with_Left(List<int> left, List<int> presult) {
-    List<int> result = List(left.length);
+    List<int> result = List.filled(left.length, 0);
     for (int i = 0; i < left.length; i++) {
       result[i] = left[i] ^ presult[i];
     }
@@ -242,7 +243,7 @@ class DES {
   ///IP_1置换
   List<int> _IP_1_transform(List<int> list) {
     ///check list length 48
-    List<int> bitKey = List(64);
+    List<int> bitKey = List.filled(64, 0);
     for (int i = 0; i < 64; i++) {
       int realIndex = IP_1[i] - 1;
       bitKey[i] = list[realIndex];
@@ -263,6 +264,11 @@ class DES {
   /// hexKey : 十六进制密钥
   String encryptToHexWithECB(String plain, String hexKey) {
     return CryptoUtil.list2Hex(encrypWithEcb(
+        Utf8Encoder().convert(plain).toList(), CryptoUtil.hex2List(hexKey)));
+  }
+
+  String encryptToHexWithECBZeroPadding(String plain, String hexKey) {
+    return CryptoUtil.list2Hex(encrypWithEcbZeroPadding(
         Utf8Encoder().convert(plain).toList(), CryptoUtil.hex2List(hexKey)));
   }
 
@@ -310,7 +316,7 @@ class DES {
     for (int i = 0; i < 16; i++) {
       var ln = R0Z;
       var pResult = P_transform(
-          _S_Box_transform(_XOR_with_Left(dispareKeys[i], E_transform(R0Z))));
+          _S_Box_transform(_XOR_with_Left(dispareKeys![i], E_transform(R0Z))));
 
       ///P盒置换的结果盒L0做异或
       var rn = _XOR_with_Left(pResult, L0Z);
@@ -377,6 +383,19 @@ class DES {
     return blockCipher;
   }
 
+  List<int> encrypWithEcbZeroPadding(List<int> plain, List<int> key) {
+    List<int> blockCipher = [];
+    int allLen = plain.length;
+    int blockCount = allLen >> 3;
+    List<int> padPlain = plain.sublist(0, blockCount << 3).toList();
+    padPlain.addAll(Padding.zeroPadding(plain.sublist(blockCount << 3)));
+    initKey(key);
+    for (int i = 0; i < padPlain.length; i += BLOCK_SIZE) {
+      blockCipher.addAll(_encryptBlock(padPlain.sublist(i, i + BLOCK_SIZE)));
+    }
+    return blockCipher;
+  }
+
   List<int> decryptBlock(List<int> cipher) {
     var plainCompressed = compressPlain(cipher);
     List<int> L0 = plainCompressed.sublist(0, plainCompressed.length >> 1);
@@ -386,7 +405,7 @@ class DES {
     for (int i = 0; i < 16; i++) {
       var ln = R0Z;
       var pResult = P_transform(_S_Box_transform(
-          _XOR_with_Left(dispareKeys[15 - i], E_transform(R0Z))));
+          _XOR_with_Left(dispareKeys![15 - i], E_transform(R0Z))));
       var rn = _XOR_with_Left(pResult, L0Z);
       L0Z = ln;
       R0Z = rn;
@@ -405,6 +424,20 @@ class DES {
     for (int i = 0; i < cipher.length; i += BLOCK_SIZE) {
       if (i == cipher.length - BLOCK_SIZE) {
         plain.addAll(Padding.pkcs7UnPadding(
+            decryptBlock(cipher.sublist(i, i + BLOCK_SIZE))));
+      } else {
+        plain.addAll(decryptBlock(cipher.sublist(i, i + BLOCK_SIZE)));
+      }
+    }
+    return plain;
+  }
+
+  List<int> decryptWithEcbZeroPadding(List<int> cipher, List<int> key) {
+    List<int> plain = [];
+    initKey(key);
+    for (int i = 0; i < cipher.length; i += BLOCK_SIZE) {
+      if (i == cipher.length - BLOCK_SIZE) {
+        plain.addAll(Padding.zeroUnPadding(
             decryptBlock(cipher.sublist(i, i + BLOCK_SIZE))));
       } else {
         plain.addAll(decryptBlock(cipher.sublist(i, i + BLOCK_SIZE)));

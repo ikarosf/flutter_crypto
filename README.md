@@ -1,3 +1,9 @@
+fork之后做的修改：
+增加nullcheck
+除原先的pkcs7外增加zero填充
+密钥位数不足时自动做zero填充
+
+
 # flutter_crypto
 Encryption algorithm library implemented by pure dart
 
